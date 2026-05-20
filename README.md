@@ -2,7 +2,11 @@
 
 A high-fidelity demo of a **parent weekly report** for an overseas children's AI math learning app. Built as a product design exercise: *how do you present a child's math progress in a way that builds parent confidence and drives subscription renewal?*
 
-![MathSpark Demo Screenshot](screenshot.png)
+<div align="center">
+  <img src="demo-1.png" width="45%" alt="MathSpark – top half"/>
+  &nbsp;&nbsp;
+  <img src="demo-2.png" width="45%" alt="MathSpark – bottom half"/>
+</div>
 
 ---
 
