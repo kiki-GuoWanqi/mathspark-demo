@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+<title>MathSpark</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.development.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap');
+*{font-family:'Inter',system-ui,sans-serif;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;padding:0;background:#F4F1FF;min-height:100vh}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(20px)}to{opacity:1;transform:translateY(0)}}
+@keyframes pulseSk{0%,100%{opacity:1}50%{opacity:.4}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@keyframes pulseDot{0%,100%{opacity:.5;transform:scale(1)}50%{opacity:0;transform:scale(2.4)}}
+@keyframes toastIn{from{transform:translateX(-50%) translateY(-20px);opacity:0}to{transform:translateX(-50%) translateY(0);opacity:1}}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+
+.sk{background:linear-gradient(90deg,#ede9fe 25%,#f5f3ff 50%,#ede9fe 75%);background-size:200% 100%;animation:pulseSk 1.5s ease-in-out infinite;border-radius:12px}
+.spinico{animation:spin .8s linear infinite;display:inline-block;width:14px;height:14px}
+.card{background:#fff;border-radius:20px;box-shadow:0 2px 16px rgba(109,40,217,.08)}
+.barfill{height:100%;border-radius:9999px;width:0;transition:width 1.2s cubic-bezier(.22,1,.36,1)}
+.modal-wrap{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;display:flex;align-items:flex-end;justify-content:center;animation:fadeUp .2s ease}
+.modal-sheet{width:100%;max-width:480px;background:#fff;border-radius:24px 24px 0 0;padding:0 0 32px;animation:slideUp .3s ease}
+.dropdown-box{position:absolute;top:calc(100% + 8px);right:0;background:#fff;border-radius:16px;box-shadow:0 8px 32px rgba(109,40,217,.18);z-index:80;min-width:200px;overflow:hidden;animation:fadeUp .15s ease}
+.expand-wrap{overflow:hidden;transition:max-height .38s cubic-bezier(.22,1,.36,1),opacity .28s ease}
+.pulse-ring{animation:pulseDot 2s ease-in-out infinite;transform-box:fill-box;transform-origin:center}
+/* heatmap tooltip */
+.hc-cell{position:relative;display:flex;flex-direction:column;align-items:center;gap:5px;cursor:pointer}
+.hc-cell:hover .hc-tip{visibility:visible}
+.hc-tip{visibility:hidden;position:absolute;bottom:calc(100% + 5px);left:50%;transform:translateX(-50%);background:#1e1b4b;color:#fff;padding:3px 8px;border-radius:6px;font-size:10px;white-space:nowrap;z-index:30;pointer-events:none}
+.hc-tip::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:4px solid transparent;border-top-color:#1e1b4b}
+/* hover tooltip for skill bar */
+.sk-label{position:relative;display:inline-block}
+.sk-label:hover .sk-tip{visibility:visible}
+.sk-tip{visibility:hidden;position:absolute;bottom:calc(100%+6px);left:0;background:#1e1b4b;color:#fff;padding:5px 10px;border-radius:8px;font-size:10px;font-weight:600;white-space:nowrap;z-index:40;pointer-events:none;box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.sk-tip::after{content:'';position:absolute;top:100%;left:14px;border:4px solid transparent;border-top-color:#1e1b4b}
+</style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+var useState = React.useState;
+var useEffect = React.useEffect;
+var useRef = React.useRef;
+var useCallback = React.useCallback;
+
+var CHILDREN = [
+  {id:'emma',   name:'Emma',   age:8,  grade:'Grade 3', avatar:'🦄', color:'#A855F7'},
+  {id:'liam',   name:'Liam',   age:10, grade:'Grade 5', avatar:'🚀', color:'#3B82F6'},
+  {id:'sophia', name:'Sophia', age:7,  grade:'Grade 2', avatar:'🌸', color:'#EC4899'},
+];
+
+/* ── Counter ── */
+function Counter(props) {
+  var to = props.to; var duration = props.duration || 1500;
+  var _s = useState(0); var v = _s[0]; var setV = _s[1];
+  useEffect(function() {
+    var cur = 0;
+    var step = to / (duration / 16);
+    var t = setInterval(function() {
+      cur += step;
+      if (cur >= to) { setV(to); clearInterval(t); }
+      else setV(Math.floor(cur));
+    }, 16);
+    return function() { clearInterval(t); };
+  }, [to]);
+  return React.createElement('span', null, v);
+}
+
+/* ── Spinner SVG ── */
+function Spinner() {
+  return (
+    <svg className="spinico" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>
+    </svg>
+  );
+}
+
+/* ── Toast ── */
+function Toast(props) {
+  var msg = props.msg; var type = props.type; var onClose = props.onClose;
+  useEffect(function() {
+    var t = setTimeout(onClose, 3500);
+    return function() { clearTimeout(t); };
+  }, []);
+  return (
+    <div style={{position:'fixed',top:16,left:'50%',transform:'translateX(-50%)',zIndex:200,minWidth:260,maxWidth:340,animation:'toastIn .35s ease'}}>
+      <div style={{background:type==='success'?'#10B981':'#EF4444',color:'#fff',padding:'12px 16px',borderRadius:14,boxShadow:'0 8px 24px rgba(0,0,0,.2)',display:'flex',alignItems:'center',gap:10,fontSize:13,fontWeight:600}}>
+        <span>{type==='success'?'✅':'❌'}</span>
+        <span style={{flex:1}}>{msg}</span>
+        <button onClick={onClose} style={{background:'none',border:'none',color:'rgba(255,255,255,.75)',cursor:'pointer',fontSize:16,lineHeight:1,padding:0}}>✕</button>
+      </div>
+    </div>
+  );
+}
+
+/* ── Renew Modal ── */
+function RenewModal(props) {
+  var subscription = props.subscription; var childId = props.childId;
+  var childName = props.childName; var onClose = props.onClose; var onSuccess = props.onSuccess;
+  var _l = useState(false); var loading = _l[0]; var setLoading = _l[1];
+  var _e = useState(null); var err = _e[0]; var setErr = _e[1];
+
+  function confirm() {
+    setLoading(true); setErr(null);
+    fetch('/api/renew', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({childId:childId, plan:'monthly'})})
+      .then(function(r) { return r.json(); })
+      .then(function(d) {
+        if (d.success) { onSuccess(d.message); onClose(); }
+        else setErr(d.message);
+        setLoading(false);
+      })
+      .catch(function() { setErr('Network error. Please try again.'); setLoading(false); });
+  }
+
+  return (
+    <div className="modal-wrap" onClick={function(e){ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-sheet">
+        <div style={{display:'flex',justifyContent:'center',padding:'12px 0 4px'}}>
+          <div style={{width:36,height:4,background:'#E5E7EB',borderRadius:2}}/>
+        </div>
+        <div style={{padding:'10px 24px 0'}}>
+          <p style={{fontSize:18,fontWeight:800,color:'#1E1B4B',margin:'0 0 4px'}}>Renew Subscription 💜</p>
+          <p style={{fontSize:12,color:'#9CA3AF',margin:'0 0 18px'}}>Keep {childName} learning without interruption</p>
+          <div style={{background:'#F5F3FF',borderRadius:14,padding:'14px 16px',marginBottom:14}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <span style={{fontWeight:700,color:'#1E1B4B',fontSize:14}}>MathSpark Monthly</span>
+              <span style={{fontWeight:800,color:'#7C3AED',fontSize:16}}>{subscription.price}</span>
+            </div>
+            <p style={{fontSize:12,color:'#6B7280',margin:0,lineHeight:1.7}}>
+              ✓ Unlimited AI-powered lessons<br/>
+              ✓ Weekly parent reports<br/>
+              ✓ Progress tracking &amp; insights
+            </p>
+          </div>
+          <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:18,padding:'10px 12px',background:'#FEF3C7',borderRadius:10}}>
+            <span>⏰</span>
+            <span style={{fontSize:12,color:'#92400E',fontWeight:600}}>
+              {subscription.daysLeft <= 7 ? 'Only ' + subscription.daysLeft + ' days left — renew now!' : 'Next billing in ' + subscription.daysLeft + ' days'}
+            </span>
+          </div>
+          {err && (
+            <div style={{background:'#FEF2F2',border:'1px solid #FECACA',borderRadius:10,padding:'10px 14px',marginBottom:14,fontSize:12,color:'#DC2626',fontWeight:600}}>
+              ❌ {err}
+            </div>
+          )}
+          <button onClick={confirm} disabled={loading}
+            style={{width:'100%',padding:'14px',background:'linear-gradient(135deg,#7C3AED,#A855F7)',color:'#fff',border:'none',borderRadius:14,fontWeight:700,fontSize:14,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:8,marginBottom:10,opacity:loading?0.7:1}}>
+            {loading ? <><Spinner/> Processing...</> : (err ? 'Retry Payment' : 'Confirm Renewal · ' + subscription.price)}
+          </button>
+          <button onClick={onClose} style={{width:'100%',padding:'10px',background:'none',border:'none',color:'#9CA3AF',fontSize:13,cursor:'pointer'}}>Maybe Later</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Full Report Modal ── */
+function FullReportModal(props) {
+  var onClose = props.onClose;
+  var items = [
+    {icon:'📊', title:'Error Pattern Analysis', preview:'Emma makes 73% of errors on carrying-over in multi-digit problems. Recommend 5 extra drill sessions on...'},
+    {icon:'🧠', title:'Learning Style Insight',  preview:'Emma responds best to visual-spatial problems. Accuracy on diagram-based questions is 94% vs 71% on text-only...'},
+    {icon:'🤖', title:'AI Coaching Notes',        preview:'AI flagged 3 recurring misconceptions in fraction comparison. Suggested: use number lines before symbolic notation...'},
+  ];
+  return (
+    <div className="modal-wrap" onClick={function(e){ if(e.target===e.currentTarget) onClose(); }}>
+      <div className="modal-sheet" style={{maxHeight:'88vh',overflowY:'auto'}}>
+        <div style={{display:'flex',justifyContent:'center',padding:'12px 0 4px'}}>
+          <div style={{width:36,height:4,background:'#E5E7EB',borderRadius:2}}/>
+        </div>
+        <div style={{padding:'8px 24px 0',textAlign:'center'}}>
+          <div style={{fontSize:42,marginBottom:8}}>🔒</div>
+          <p style={{fontSize:18,fontWeight:800,color:'#1E1B4B',margin:'0 0 4px'}}>Full Report is Premium</p>
+          <p style={{fontSize:12,color:'#9CA3AF',margin:'0 0 18px'}}>Upgrade to unlock detailed AI insights</p>
+          {items.map(function(item) {
+            return (
+              <div key={item.title} style={{position:'relative',marginBottom:12,textAlign:'left'}}>
+                <div style={{background:'#F9FAFB',borderRadius:12,padding:'12px 14px',filter:'blur(4px)',userSelect:'none',pointerEvents:'none'}}>
+                  <p style={{fontWeight:700,fontSize:13,color:'#111827',margin:'0 0 4px'}}>{item.icon} {item.title}</p>
+                  <p style={{fontSize:11,color:'#6B7280',margin:0,lineHeight:1.6}}>{item.preview}</p>
+                </div>
+                <div style={{position:'absolute',inset:0,display:'flex',alignItems:'center',justifyContent:'center'}}>
+                  <span style={{background:'#7C3AED',color:'#fff',fontSize:11,fontWeight:700,padding:'4px 12px',borderRadius:99}}>🔒 Premium Only</span>
+                </div>
+              </div>
+            );
+          })}
+          <button onClick={onClose} style={{width:'100%',padding:'14px',background:'linear-gradient(135deg,#7C3AED,#A855F7)',color:'#fff',border:'none',borderRadius:14,fontWeight:700,fontSize:14,cursor:'pointer',marginTop:4,marginBottom:10}}>
+            Upgrade Plan ✨
+          </button>
+          <button onClick={onClose} style={{width:'100%',padding:'10px',background:'none',border:'none',color:'#9CA3AF',fontSize:13,cursor:'pointer'}}>Maybe Later</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Skeleton ── */
+function Skeleton() {
+  return (
+    <div style={{display:'flex',flexDirection:'column',gap:14}}>
+      <div className="sk" style={{height:195}}/>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+        <div className="sk" style={{height:96}}/><div className="sk" style={{height:96}}/><div className="sk" style={{height:96}}/>
+      </div>
+      <div className="sk" style={{height:175}}/><div className="sk" style={{height:140}}/><div className="sk" style={{height:150}}/>
+    </div>
+  );
+}
+
+/* ── Line Chart ── */
+function LineChart(props) {
+  var data = props.data;
+  var _h = useState(null); var hov = _h[0]; var setHov = _h[1];
+  var _s = useState(null); var sel = _s[0]; var setSel = _s[1];
+  var W=360,H=158,PL=22,PR=10,PT=16,PB=28;
+  var iW=W-PL-PR, iH=H-PT-PB;
+  var vals = data.map(function(d){return d.skills;});
+  var minV = Math.min.apply(null,vals)-1;
+  var maxV = Math.max.apply(null,vals)+1;
+  function xOf(i){return PL+(i/(data.length-1))*iW;}
+  function yOf(v){return PT+iH-((v-minV)/(maxV-minV))*iH;}
+  var pts = data.map(function(d,i){return xOf(i)+','+yOf(d.skills);}).join(' ');
+  var area = 'M'+xOf(0)+','+yOf(data[0].skills)+' '
+    +data.map(function(d,i){return 'L'+xOf(i)+','+yOf(d.skills);}).join(' ')
+    +' L'+xOf(data.length-1)+','+(PT+iH)+' L'+xOf(0)+','+(PT+iH)+' Z';
+  var last = data.length - 1;
+
+  return (
+    <div>
+      <svg viewBox={'0 0 '+W+' '+H} style={{width:'100%',height:158}}>
+        <defs>
+          <linearGradient id="cg2" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="#7C3AED" stopOpacity=".2"/>
+            <stop offset="100%" stopColor="#7C3AED" stopOpacity="0"/>
+          </linearGradient>
+        </defs>
+        {[0,.33,.66,1].map(function(t,ti){
+          return <line key={ti} x1={PL} x2={W-PR} y1={PT+iH*t} y2={PT+iH*t} stroke="#EDE9FE" strokeWidth="1"/>;
+        })}
+        <path d={area} fill="url(#cg2)"/>
+        <polyline points={pts} fill="none" stroke="#7C3AED" strokeWidth="2.4" strokeLinejoin="round" strokeLinecap="round"/>
+        {data.map(function(d,i) {
+          var cx=xOf(i), cy=yOf(d.skills);
+          var isLast=i===last, isHov=hov===i, isSel=sel===i;
+          var tipX = Math.min(Math.max(cx, PL+36), W-PR-36);
+          return (
+            <g key={i}>
+              {isLast && <circle cx={cx} cy={cy} r={9} fill="#7C3AED" fillOpacity={0.25} stroke="none" className="pulse-ring"/>}
+              <circle cx={cx} cy={cy} r={isLast?6:isHov?5:3.5}
+                fill={isLast||isSel?'#7C3AED':'#fff'} stroke="#7C3AED" strokeWidth="2"/>
+              {isSel && !isLast && <circle cx={cx} cy={cy} r={8} fill="none" stroke="#7C3AED" strokeWidth="1.5" strokeDasharray="3 2"/>}
+              {isHov && (
+                <g>
+                  <rect x={tipX-36} y={cy-44} width={72} height={28} rx={7} fill="#1e1b4b"/>
+                  <text x={tipX} y={cy-30} textAnchor="middle" fontSize="10" fill="#fff" fontWeight="700">{d.skills} skills</text>
+                  <text x={tipX} y={cy-18} textAnchor="middle" fontSize="9" fill="rgba(255,255,255,.7)">{d.week}</text>
+                </g>
+              )}
+              <text x={cx} y={H-4} textAnchor="middle" fontSize="8.5" fill={isLast?'#7C3AED':'#9CA3AF'} fontWeight={isLast?'700':'400'}>
+                {d.week.replace('Apr ','').replace('May ','')}
+              </text>
+              <circle cx={cx} cy={cy} r={18} fill="transparent" style={{cursor:'pointer'}}
+                onMouseEnter={function(){setHov(i);}} onMouseLeave={function(){setHov(null);}}
+                onClick={function(){setSel(sel===i?null:i);}}/>
+            </g>
+          );
+        })}
+      </svg>
+      <div className="expand-wrap" style={{maxHeight:sel!==null?'90px':'0px',opacity:sel!==null?1:0}}>
+        {sel!==null && (
+          <div style={{background:'#F5F3FF',borderRadius:10,padding:'10px 12px',marginTop:6,borderLeft:'3px solid #7C3AED'}}>
+            <p style={{fontSize:11,fontWeight:700,color:'#7C3AED',margin:'0 0 3px'}}>{data[sel].week}</p>
+            <p style={{fontSize:11,color:'#5B21B6',margin:0,lineHeight:1.55}}>{data[sel].summary}</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ── Heatmap ── */
+function HeatmapSection(props) {
+  var data = props.data;
+  var _x = useState(null); var expanded = _x[0]; var setExpanded = _x[1];
+  function toggle(day){ setExpanded(expanded===day?null:day); }
+  var expData = null;
+  if (expanded) {
+    for (var k=0;k<data.length;k++) { if(data[k].day===expanded){ expData=data[k]; break; } }
+  }
+  return (
+    <div>
+      <div style={{display:'flex',justifyContent:'space-between'}}>
+        {data.map(function(c) {
+          var op = 0.1 + Math.min(c.minutes/40,1)*0.85;
+          var isExp = expanded===c.day;
+          return (
+            <div key={c.day} className="hc-cell" onClick={function(){toggle(c.day);}}>
+              <div style={{width:36,height:36,background:'rgba(124,58,237,'+op+')',borderRadius:9,border:isExp?'2.5px solid #7C3AED':'2.5px solid transparent',transition:'border .15s'}}>
+                <span className="hc-tip">{c.day}: {c.minutes} min</span>
+              </div>
+              <span style={{fontSize:9,color:isExp?'#7C3AED':'#9CA3AF',fontWeight:isExp?700:500}}>{c.day}</span>
+            </div>
+          );
+        })}
+      </div>
+      <div className="expand-wrap" style={{maxHeight:expanded?'110px':'0px',opacity:expanded?1:0}}>
+        {expData && (
+          <div style={{marginTop:10,background:'#F5F3FF',borderRadius:12,padding:'10px 14px'}}>
+            <p style={{fontSize:11,fontWeight:700,color:'#7C3AED',margin:'0 0 6px'}}>📚 {expData.day} · {expData.minutes} min</p>
+            <div style={{display:'flex',flexWrap:'wrap',gap:5}}>
+              {expData.skills.map(function(s){
+                return <span key={s} style={{fontSize:10,fontWeight:600,padding:'3px 9px',borderRadius:99,background:'#fff',color:'#5B21B6',border:'1px solid #DDD6FE'}}>{s}</span>;
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+      <div style={{display:'flex',alignItems:'center',gap:4,marginTop:10,justifyContent:'flex-end'}}>
+        <span style={{fontSize:9,color:'#D1D5DB'}}>Less</span>
+        {[.1,.28,.48,.68,.92].map(function(o){
+          return <div key={o} style={{width:11,height:11,background:'rgba(124,58,237,'+o+')',borderRadius:3}}/>;
+        })}
+        <span style={{fontSize:9,color:'#D1D5DB'}}>More</span>
+      </div>
+    </div>
+  );
+}
+
+/* ── Skill Bar ── */
+function SkillBar(props) {
+  var skill = props.skill;
+  var _e = useState(false); var expanded = _e[0]; var setExpanded = _e[1];
+  var barRef = useRef(null);
+  useEffect(function() {
+    var t = setTimeout(function(){
+      if(barRef.current) barRef.current.style.width = skill.percent + '%';
+    }, 380);
+    return function(){clearTimeout(t);};
+  }, [skill.percent]);
+
+  return (
+    <div>
+      <div onClick={function(){setExpanded(!expanded);}} style={{display:'flex',justifyContent:'space-between',marginBottom:6,cursor:'pointer',alignItems:'center',userSelect:'none'}}>
+        <div className="sk-label">
+          <span style={{fontSize:13,fontWeight:600,color:'#374151'}}>{skill.name}</span>
+          <div className="sk-tip">{skill.mastered}/{skill.total} questions mastered</div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',gap:6}}>
+          <span style={{fontSize:11,fontWeight:700,color:skill.done?'#10B981':'#7C3AED'}}>
+            {skill.done ? '✓ Mastered' : skill.percent + '%'}
+          </span>
+          <span style={{fontSize:9,color:'#D1D5DB',transition:'transform .2s',display:'inline-block',transform:expanded?'rotate(180deg)':'rotate(0deg)'}}>▼</span>
+        </div>
+      </div>
+      <div style={{width:'100%',background:'#F3F4F6',borderRadius:9999,height:9,marginBottom:4}}>
+        <div ref={barRef} className="barfill" style={{background:skill.done?'#10B981':'#7C3AED'}}/>
+      </div>
+      <div className="expand-wrap" style={{maxHeight:expanded?'260px':'0px',opacity:expanded?1:0}}>
+        <div style={{paddingTop:10}}>
+          {skill.done ? (
+            <div style={{background:'#ECFDF5',borderRadius:10,padding:'10px 14px',textAlign:'center'}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#065F46',margin:'0 0 3px'}}>🎉 Mastered on {skill.masteredDate}</p>
+              <p style={{fontSize:11,color:'#059669',margin:0}}>{skill.mastered}/{skill.total} questions completed</p>
+            </div>
+          ) : (
+            <div>
+              <p style={{fontSize:10,fontWeight:700,color:'#9CA3AF',margin:'0 0 6px',textTransform:'uppercase',letterSpacing:'.5px'}}>Recent Practice</p>
+              {skill.questions.map(function(q,qi){
+                return (
+                  <div key={qi} style={{display:'flex',alignItems:'flex-start',gap:8,padding:'7px 10px',background:q.correct?'#F0FDF4':'#FFF7F7',borderRadius:9,marginBottom:5,border:'1px solid '+(q.correct?'#BBF7D0':'#FECACA')}}>
+                    <span style={{fontSize:12,flexShrink:0,marginTop:1}}>{q.correct?'✅':'❌'}</span>
+                    <div>
+                      <p style={{fontSize:11,color:'#374151',margin:0,lineHeight:1.4}}>{q.q}</p>
+                      <p style={{fontSize:11,fontWeight:700,color:q.correct?'#059669':'#DC2626',margin:'2px 0 0'}}>→ {q.a}</p>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ── Child Dropdown ── */
+function ChildDropdown(props) {
+  var current = props.current; var onSelect = props.onSelect; var onClose = props.onClose;
+  var ref = useRef(null);
+  useEffect(function() {
+    function handler(e) { if(ref.current && !ref.current.contains(e.target)) onClose(); }
+    document.addEventListener('mousedown', handler);
+    return function(){ document.removeEventListener('mousedown', handler); };
+  }, []);
+  return (
+    <div ref={ref} className="dropdown-box">
+      {CHILDREN.map(function(c){
+        return (
+          <button key={c.id} onClick={function(){onSelect(c.id); onClose();}}
+            style={{width:'100%',display:'flex',alignItems:'center',gap:12,padding:'11px 16px',background:current===c.id?'#F5F3FF':'transparent',border:'none',cursor:'pointer',textAlign:'left'}}>
+            <div style={{width:36,height:36,borderRadius:11,background:c.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{c.avatar}</div>
+            <div style={{flex:1}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#111827',margin:0}}>{c.name}</p>
+              <p style={{fontSize:11,color:'#9CA3AF',margin:0}}>{c.grade} · Age {c.age}</p>
+            </div>
+            {current===c.id && (
+              <div style={{width:18,height:18,borderRadius:'50%',background:'#7C3AED',display:'flex',alignItems:'center',justifyContent:'center'}}>
+                <svg width="8" height="7" viewBox="0 0 8 7" fill="none"><path d="M1 3.5l2 2L7 1" stroke="#fff" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"/></svg>
+              </div>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ══ App ══ */
+function App() {
+  var _ci = useState('emma'); var childId = _ci[0]; var setChildId = _ci[1];
+  var _da = useState(null);   var data = _da[0];    var setData = _da[1];
+  var _lo = useState(true);   var loading = _lo[0]; var setLoading = _lo[1];
+  var _er = useState(null);   var error = _er[0];   var setError = _er[1];
+  var _to = useState(null);   var toast = _to[0];   var setToast = _to[1];
+  var _rm = useState(false);  var renewModal = _rm[0]; var setRenewModal = _rm[1];
+  var _fm = useState(false);  var fullModal = _fm[0];  var setFullModal = _fm[1];
+  var _dd = useState(false);  var dropdown = _dd[0];   var setDropdown = _dd[1];
+  var _dl = useState(false);  var detailLoading = _dl[0]; var setDetailLoading = _dl[1];
+  var _sb = useState(false);  var showBar = _sb[0];      var setShowBar = _sb[1];
+
+  useEffect(function() {
+    function onScroll() {
+      var scrolled = window.innerHeight + window.scrollY;
+      var total = document.body.offsetHeight;
+      setShowBar(scrolled >= total - 80);
+    }
+    window.addEventListener('scroll', onScroll);
+    return function() { window.removeEventListener('scroll', onScroll); };
+  }, []);
+
+  var currentChild = CHILDREN[0];
+  for (var ci=0; ci<CHILDREN.length; ci++) { if(CHILDREN[ci].id===childId){ currentChild=CHILDREN[ci]; break; } }
+
+  var fetchReport = useCallback(function(id) {
+    setLoading(true); setError(null); setData(null);
+    fetch('/api/report/'+id)
+      .then(function(r){ if(!r.ok) throw new Error('Error '+r.status); return r.json(); })
+      .then(function(d){ setData(d); setLoading(false); })
+      .catch(function(e){ setError(e.message); setLoading(false); });
+  }, []);
+
+  useEffect(function(){ fetchReport(childId); }, [childId]);
+
+  function handleDetails() {
+    setDetailLoading(true);
+    fetch('/api/report/'+childId+'/details')
+      .then(function(r){ return r.json(); })
+      .then(function(d){ if(d.locked) setFullModal(true); setDetailLoading(false); })
+      .catch(function(){ setToast({msg:'Failed to load.',type:'error'}); setDetailLoading(false); });
+  }
+
+  var sub = data ? data.subscription : null;
+
+  return (
+    <div style={{maxWidth:480,margin:'0 auto',minHeight:'100vh',background:'#F4F1FF',paddingBottom:76}}>
+      {toast && <Toast msg={toast.msg} type={toast.type} onClose={function(){setToast(null);}}/>}
+      {renewModal && sub && (
+        <RenewModal subscription={sub} childId={childId} childName={currentChild.name}
+          onClose={function(){setRenewModal(false);}}
+          onSuccess={function(msg){setToast({msg:msg,type:'success'});}}/>
+      )}
+      {fullModal && <FullReportModal onClose={function(){setFullModal(false);}}/>}
+
+      {/* Nav */}
+      <div style={{background:'#fff',borderBottom:'1px solid #F0ECFF',position:'sticky',top:0,zIndex:50}}>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'11px 16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <div style={{width:30,height:30,borderRadius:10,background:'linear-gradient(135deg,#7C3AED,#A855F7)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:14,color:'#fff',fontWeight:900}}>✦</div>
+            <span style={{fontWeight:900,fontSize:16,color:'#1E1B4B',letterSpacing:'-.4px'}}>MathSpark</span>
+          </div>
+          <div style={{position:'relative'}}>
+            <button onClick={function(){setDropdown(!dropdown);}}
+              style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px 6px 7px',borderRadius:14,background:'#F5F3FF',border:'1.5px solid '+(dropdown?'#7C3AED':'#DDD6FE'),cursor:'pointer'}}>
+              <div style={{width:28,height:28,borderRadius:9,background:currentChild.color+'22',display:'flex',alignItems:'center',justifyContent:'center',fontSize:16}}>{currentChild.avatar}</div>
+              <div style={{textAlign:'left'}}>
+                <p style={{fontSize:11,fontWeight:700,color:'#1E1B4B',margin:0,lineHeight:1}}>{currentChild.name}</p>
+                <p style={{fontSize:9,color:'#9CA3AF',margin:0,lineHeight:1.4}}>{currentChild.grade}</p>
+              </div>
+              <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style={{transition:'transform .2s',transform:dropdown?'rotate(180deg)':'rotate(0deg)'}}>
+                <path d="M2 3.5L5 6.5L8 3.5" stroke="#9CA3AF" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round"/>
+              </svg>
+            </button>
+            {dropdown && <ChildDropdown current={childId} onSelect={function(id){setChildId(id);}} onClose={function(){setDropdown(false);}}/>}
+          </div>
+        </div>
+        <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'0 16px 10px'}}>
+          <p style={{fontSize:10,color:'#9CA3AF',fontWeight:500,margin:0}}>May 12 – 18, 2025</p>
+          <div style={{display:'flex',alignItems:'center',gap:4}}>
+            <div style={{width:5,height:5,borderRadius:'50%',background:'#10B981'}}/>
+            <span style={{fontSize:10,color:'#10B981',fontWeight:600}}>Active</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Content */}
+      <div style={{padding:'14px 16px 8px',display:'flex',flexDirection:'column',gap:14}}>
+        {loading && <Skeleton/>}
+        {error && (
+          <div className="card" style={{padding:36,textAlign:'center',marginTop:8}}>
+            <div style={{fontSize:38,marginBottom:10}}>😕</div>
+            <p style={{fontWeight:700,color:'#EF4444',fontSize:15,margin:'0 0 4px'}}>Couldn't load report</p>
+            <p style={{fontSize:12,color:'#9CA3AF',margin:'0 0 18px'}}>{error}</p>
+            <button onClick={function(){fetchReport(childId);}} style={{padding:'10px 28px',background:'#7C3AED',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:13,cursor:'pointer'}}>Retry</button>
+          </div>
+        )}
+
+        {data && !loading && (
+          <div style={{display:'flex',flexDirection:'column',gap:14}}>
+
+            {/* Hero — stagger 0 */}
+            <div className="card" style={{overflow:'hidden',animation:'fadeUp .48s ease 0s both'}}>
+              <div style={{background:'linear-gradient(140deg,#5B21B6,#7C3AED,'+currentChild.color+')',padding:'18px 18px 16px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:12,marginBottom:14}}>
+                  <div style={{width:56,height:56,borderRadius:18,background:'rgba(255,255,255,.16)',display:'flex',alignItems:'center',justifyContent:'center',fontSize:28,flexShrink:0}}>{data.child.avatar}</div>
+                  <div>
+                    <h1 style={{fontSize:19,fontWeight:900,color:'#fff',margin:0,lineHeight:1.2}}>{data.child.name}'s Report 🌟</h1>
+                    <p style={{fontSize:11,color:'rgba(255,255,255,.65)',margin:'4px 0 0'}}>{data.child.grade} · Age {data.child.age}</p>
+                    <p style={{fontSize:11,color:'#FCD34D',fontWeight:700,margin:'4px 0 0'}}>🔥 {data.stats.streak}-day streak</p>
+                  </div>
+                </div>
+                <div style={{background:'rgba(255,255,255,.14)',borderRadius:14,padding:'12px 14px'}}>
+                  <p style={{fontSize:14,fontWeight:700,color:'#fff',margin:'0 0 5px',lineHeight:1.35}}>{data.summary.headline}</p>
+                  <p style={{fontSize:11,color:'rgba(255,255,255,.72)',margin:0,lineHeight:1.6}}>{data.summary.subline}</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Stats — stagger 1,2,3 */}
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:12}}>
+              {[
+                {label:'Skills',sub:'Mastered',icon:'📐',val:data.stats.skillsMastered.thisWeek,prev:data.stats.skillsMastered.lastWeek},
+                {label:'Focus', sub:'Minutes', icon:'⏱',val:data.stats.focusMinutes.thisWeek,   prev:data.stats.focusMinutes.lastWeek},
+                {label:'Day',   sub:'Streak',  icon:'🔥',val:data.stats.streak, prev:null},
+              ].map(function(item, idx){
+                var diff = item.prev !== null ? item.val - item.prev : null;
+                var pct = item.prev ? Math.round(Math.abs(diff)/item.prev*100) : null;
+                return (
+                  <div key={item.label} className="card" style={{padding:'13px 8px',textAlign:'center',animation:'fadeUp .48s ease '+((idx+1)*0.09)+'s both'}}>
+                    <div style={{fontSize:22,marginBottom:3}}>{item.icon}</div>
+                    <div style={{fontSize:22,fontWeight:900,color:'#7C3AED',lineHeight:1}}><Counter to={item.val}/></div>
+                    <div style={{fontSize:9,color:'#6B7280',marginTop:3,lineHeight:1.4}}>{item.label}<br/>{item.sub}</div>
+                    {diff!==null && <div style={{fontSize:9,fontWeight:700,marginTop:5,color:diff>=0?'#10B981':'#EF4444'}}>{diff>=0?'↑':'↓'}{pct}% vs last wk</div>}
+                    {item.prev===null && <div style={{fontSize:9,fontWeight:700,marginTop:5,color:'#F59E0B'}}>On fire! 🔥</div>}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Chart */}
+            <div className="card" style={{padding:'16px 14px',animation:'fadeUp .48s ease .36s both'}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#111827',margin:'0 0 2px'}}>📈 6-Week Progress</p>
+              <p style={{fontSize:10,color:'#9CA3AF',margin:'0 0 10px'}}>Click a point to see that week's story</p>
+              <LineChart data={data.weeklyTrend}/>
+            </div>
+
+            {/* Heatmap */}
+            <div className="card" style={{padding:'16px 14px',animation:'fadeUp .48s ease .45s both'}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#111827',margin:'0 0 2px'}}>🗓 Focus This Week</p>
+              <p style={{fontSize:10,color:'#9CA3AF',margin:'0 0 12px'}}>Tap a day to see what was studied</p>
+              <HeatmapSection data={data.heatmap}/>
+            </div>
+
+            {/* Highlight */}
+            <div className="card" style={{overflow:'hidden',animation:'fadeUp .48s ease .54s both'}}>
+              <div style={{background:'linear-gradient(135deg,#FFFBEB,#FEF3C7)',padding:'16px'}}>
+                <p style={{fontSize:13,fontWeight:700,color:'#92400E',margin:'0 0 6px'}}>{data.highlight.title}</p>
+                <p style={{fontSize:12,color:'#B45309',margin:0,lineHeight:1.65}}>{data.highlight.content}</p>
+              </div>
+            </div>
+
+            {/* Skills */}
+            <div className="card" style={{padding:'16px',animation:'fadeUp .48s ease .63s both'}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#111827',margin:'0 0 2px'}}>🎯 Skill Mastery</p>
+              <p style={{fontSize:10,color:'#9CA3AF',margin:'0 0 16px'}}>Hover name for stats · tap to see practice questions</p>
+              <div style={{display:'flex',flexDirection:'column',gap:16}}>
+                {data.skillsProgress.map(function(s){ return <SkillBar key={s.name} skill={s}/>; })}
+              </div>
+            </div>
+
+            {/* Next week */}
+            <div className="card" style={{padding:'16px',animation:'fadeUp .48s ease .72s both'}}>
+              <p style={{fontSize:13,fontWeight:700,color:'#111827',margin:'0 0 10px'}}>🚀 Coming Next Week</p>
+              <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:12}}>
+                {data.nextWeek.skills.map(function(s){
+                  return <span key={s} style={{fontSize:11,fontWeight:600,padding:'5px 11px',borderRadius:99,background:'#F5F3FF',color:'#7C3AED'}}>{s}</span>;
+                })}
+              </div>
+              <div style={{background:'#F5F3FF',borderRadius:12,padding:'11px 13px'}}>
+                <p style={{fontSize:12,color:'#5B21B6',margin:0,lineHeight:1.65,fontStyle:'italic'}}>"{data.nextWeek.motivation}"</p>
+              </div>
+            </div>
+
+            {/* View Full Report */}
+            <button onClick={handleDetails} disabled={detailLoading}
+              style={{width:'100%',padding:'15px',background:'#fff',border:'1.5px solid #DDD6FE',borderRadius:18,color:'#7C3AED',fontWeight:600,fontSize:13,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:6,opacity:detailLoading?0.6:1,animation:'fadeUp .48s ease .81s both',boxShadow:'0 2px 10px rgba(109,40,217,.07)'}}>
+              {detailLoading ? <><Spinner/> Loading...</> : <span>🔍 View Full Report <span style={{fontSize:10,color:'#9CA3AF',fontWeight:400}}>· Premium</span></span>}
+            </button>
+
+            <p style={{textAlign:'center',fontSize:10,color:'#C4B5FD',margin:'2px 0 6px'}}>MathSpark · Helping kids love math 💜</p>
+          </div>
+        )}
+      </div>
+
+      {/* Fixed bottom bar — slides in when user scrolls to bottom */}
+      {data && !loading && sub && (
+        <div style={{position:'fixed',bottom:0,left:'50%',transform:showBar?'translateX(-50%) translateY(0)':'translateX(-50%) translateY(100%)',transition:'transform .38s cubic-bezier(.22,1,.36,1)',width:'100%',maxWidth:480,zIndex:40,background:'#fff',borderTop:'1px solid #EDE9FE',padding:'10px 16px 16px'}}>
+          <div style={{display:'flex',alignItems:'center',gap:10}}>
+            <div style={{flex:1}}>
+              <p style={{fontSize:12,fontWeight:700,color:sub.daysLeft<=7?'#DC2626':'#1E1B4B',margin:0}}>
+                {sub.daysLeft<=7?'⚠️':'🔔'} {sub.daysLeft} days until renewal
+              </p>
+              <p style={{fontSize:10,color:'#9CA3AF',margin:0}}>{sub.price} / month · cancel anytime</p>
+            </div>
+            <button onClick={function(){setRenewModal(true);}}
+              style={{flexShrink:0,padding:'9px 16px',background:'linear-gradient(135deg,#7C3AED,#A855F7)',color:'#fff',border:'none',borderRadius:12,fontWeight:700,fontSize:12,cursor:'pointer',whiteSpace:'nowrap'}}>
+              Renew Now →
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
